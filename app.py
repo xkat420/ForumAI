@@ -3,7 +3,7 @@ import json
 import time
 from flask import Flask, render_template, request, Response, jsonify
 from async_forum_scraper import AsyncForumScraper
-from custom_forum_model import TextModel  # Import our custom model instead
+from text_model import TextModel  # Import our custom model instead
 import asyncio
 import threading
 
