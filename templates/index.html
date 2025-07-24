@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forum AI Text Model</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 20px;
+            padding-bottom: 40px;
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 1200px;
+        }
+        .card {
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .card-header {
+            font-weight: bold;
+            background-color: #f1f8ff;
+        }
+        .progress {
+            height: 25px;
+            margin-bottom: 10px;
+        }
+        .progress-bar {
+            line-height: 25px;
+            font-weight: bold;
+        }
+        .event-log {
+            height: 300px;
+            overflow-y: auto;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        .event-success {
+            color: #28a745;
+        }
+        .event-failure {
+            color: #dc3545;
+        }
+        .stats-box {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+        .connection-indicator {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .connection-active {
+            background-color: #28a745;
+            animation: pulse 1.5s infinite;
+        }
+        .connection-inactive {
+            background-color: #dc3545;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .generated-text {
+            white-space: pre-wrap;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Georgia', serif;
+            line-height: 1.6;
+        }
+        .nav-tabs .nav-link {
+            font-weight: bold;
+        }
+        .tab-content {
+            padding: 20px;
+            background-color: #fff;
+            border-left: 1px solid #dee2e6;
+            border-right: 1px solid #dee2e6;
+            border-bottom: 1px solid #dee2e6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="mb-4">
+            <h1 class="text-center">Forum AI Text Model</h1>
+            <p class="text-center text-muted">Scrape forum posts, train a text generation model, and generate coherent text</p>
+        </header>
+        
+        <div class="connection-status mb-3">
+            <div class="connection-indicator connection-inactive" id="connectionIndicator"></div>
+            <span id="connectionStatus">Connecting to server...</span>
+        </div>
+        
+        <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="scrape-tab" data-bs-toggle="tab" data-bs-target="#scrape" type="button" role="tab" aria-controls="scrape" aria-selected="true">Scrape Data</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="train-tab" data-bs-toggle="tab" data-bs-target="#train" type="button" role="tab" aria-controls="train" aria-selected="false">Train Model</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="generate-tab" data-bs-toggle="tab" data-bs-target="#generate" type="button" role="tab" aria-controls="generate" aria-selected="false">Generate Text</button>
+            </li>
+        </ul>
+        
+        <div class="tab-content" id="mainTabsContent">
+            <!-- Scrape Tab -->
+            <div class="tab-pane fade show active" id="scrape" role="tabpanel" aria-labelledby="scrape-tab">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header">Scraping Configuration</div>
+                            <div class="card-body">
+                                <form id="scrapeForm">
+                                    <div class="mb-3">
+                                        <label for="startId" class="form-label">Start Post ID</label>
+                                        <input type="number" class="form-control" id="startId" name="start_id" value="10000" min="1">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="endId" class="form-label">End Post ID</label>
+                                        <input type="number" class="form-control" id="endId" name="end_id" value="10100" min="1">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="maxConnections" class="form-label">Max Concurrent Connections</label>
+                                        <input type="number" class="form-control" id="maxConnections" name="max_connections" value="10" min="1" max="5000">
+                                        <div class="form-text">Higher values may be faster but could trigger rate limiting.</div>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary w-100" id="startScrapeBtn">Start Scraping</button>
+                                </form>
+                            </div>
+                        </div>
+                        
+                        <div class="card">
+                            <div class="card-header">Connection Statistics</div>
+                            <div class="card-body">
+                                <div class="stats-box">
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <p class="mb-1"><strong>Successful:</strong> <span id="successfulConnections">0</span></p>
+                                            <p class="mb-1"><strong>Failed:</strong> <span id="failedConnections">0</span></p>
+                                        </div>
+                                        <div class="col-6">
+                                            <p class="mb-1"><strong>Avg Response:</strong> <span id="avgResponseTime">0</span> ms</p>
+                                            <p class="mb-1"><strong>Status:</strong> <span id="scrapingStatus">Idle</span></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header">Scraping Progress</div>
+                            <div class="card-body">
+                                <div class="progress mb-3">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated" id="scrapeProgressBar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                                </div>
+                                <div class="row mb-3">
+                                    <div class="col-md-4">
+                                        <p class="mb-1"><strong>Processed:</strong> <span id="processedPosts">0</span> / <span id="totalPosts">0</span></p>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <p class="mb-1"><strong>Successful:</strong> <span id="successfulPosts">0</span></p>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <p class="mb-1"><strong>Failed:</strong> <span id="failedPosts">0</span></p>
+                                    </div>
+                                </div>
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <p class="mb-1"><strong>Current ID:</strong> <span id="currentId">-</span></p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <p class="mb-1"><strong>Elapsed Time:</strong> <span id="elapsedTime">00:00:00</span></p>
+                                    </div>
+                                </div>
+                                
+                                <h5>Event Log</h5>
+                                <div class="event-log" id="eventLog"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Train Tab -->
+            <div class="tab-pane fade" id="train" role="tabpanel" aria-labelledby="train-tab">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header">Training Configuration</div>
+                            <div class="card-body">
+                                <form id="trainForm">
+                                    <div class="mb-3">
+                                        <label for="epochs" class="form-label">Epochs</label>
+                                        <input type="number" class="form-control" id="epochs" name="epochs" value="5" min="1">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="batchSize" class="form-label">Batch Size</label>
+                                        <input type="number" class="form-control" id="batchSize" name="batch_size" value="16" min="1">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="learningRate" class="form-label">Learning Rate</label>
+                                        <input type="number" class="form-control" id="learningRate" name="learning_rate" value="0.001" step="0.0001" min="0.0001">
+                                    </div>
+                                    <button type="submit" class="btn btn-primary w-100" id="startTrainBtn">Start Training</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header">Training Progress</div>
+                            <div class="card-body">
+                                <div class="progress mb-3">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" id="trainProgressBar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                                </div>
+                                <div class="row mb-3">
+                                    <div class="col-md-4">
+                                        <p class="mb-1"><strong>Step:</strong> <span id="currentStep">0</span> / <span id="totalSteps">0</span></p>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <p class="mb-1"><strong>Loss:</strong> <span id="currentLoss">0</span></p>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <p class="mb-1"><strong>Status:</strong> <span id="trainingStatus">Idle</span></p>
+                                    </div>
+                                </div>
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <p class="mb-1"><strong>Elapsed Time:</strong> <span id="trainingElapsedTime">00:00:00</span></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Generate Tab -->
+            <div class="tab-pane fade" id="generate" role="tabpanel" aria-labelledby="generate-tab">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header">Generation Parameters</div>
+                            <div class="card-body">
+                                <form id="generateForm">
+                                    <div class="mb-3">
+                                        <label for="prompt" class="form-label">Prompt (Optional)</label>
+                                        <textarea class="form-control" id="prompt" name="prompt" rows="3" placeholder="Enter a prompt to start generation..."></textarea>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="maxLength" class="form-label">Max Length</label>
+                                        <input type="number" class="form-control" id="maxLength" name="max_length" value="100" min="10" max="1000">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="temperature" class="form-label">Temperature</label>
+                                        <input type="range" class="form-range" id="temperature" name="temperature" min="0.1" max="2" step="0.1" value="0.7">
+                                        <div class="d-flex justify-content-between">
+                                            <span class="form-text">Focused (0.1)</span>
+                                            <span class="form-text" id="temperatureValue">0.7</span>
+                                            <span class="form-text">Creative (2.0)</span>
+                                        </div>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary w-100" id="generateBtn">Generate Text</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header">Generated Text</div>
+                            <div class="card-body">
+                                <div class="generated-text" id="generatedText">
+                                    <p class="text-muted">Generated text will appear here...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // DOM Elements
+        const connectionIndicator = document.getElementById('connectionIndicator');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const scrapeForm = document.getElementById('scrapeForm');
+        const trainForm = document.getElementById('trainForm');
+        const generateForm = document.getElementById('generateForm');
+        const scrapeProgressBar = document.getElementById('scrapeProgressBar');
+        const trainProgressBar = document.getElementById('trainProgressBar');
+        const processedPosts = document.getElementById('processedPosts');
+        const totalPosts = document.getElementById('totalPosts');
+        const successfulPosts = document.getElementById('successfulPosts');
+        const failedPosts = document.getElementById('failedPosts');
+        const currentId = document.getElementById('currentId');
+        const elapsedTime = document.getElementById('elapsedTime');
+        const eventLog = document.getElementById('eventLog');
+        const successfulConnections = document.getElementById('successfulConnections');
+        const failedConnections = document.getElementById('failedConnections');
+        const avgResponseTime = document.getElementById('avgResponseTime');
+        const scrapingStatus = document.getElementById('scrapingStatus');
+        const currentStep = document.getElementById('currentStep');
+        const totalSteps = document.getElementById('totalSteps');
+        const currentLoss = document.getElementById('currentLoss');
+        const trainingStatus = document.getElementById('trainingStatus');
+        const trainingElapsedTime = document.getElementById('trainingElapsedTime');
+        const temperatureSlider = document.getElementById('temperature');
+        const temperatureValue = document.getElementById('temperatureValue');
+        const generatedText = document.getElementById('generatedText');
+        
+        // Global variables
+        let eventSource = null;
+        let scrapeStartTime = 0;
+        let trainingStartTime = 0;
+        let scrapeTimer = null;
+        let trainingTimer = null;
+        
+        // Format time as HH:MM:SS
+        function formatTime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        // Update elapsed time for scraping
+        function updateScrapeElapsedTime() {
+            if (scrapeStartTime > 0) {
+                const elapsed = Math.floor((Date.now() - scrapeStartTime) / 1000);
+                elapsedTime.textContent = formatTime(elapsed);
+            }
+        }
+        
+        // Update elapsed time for training
+        function updateTrainingElapsedTime() {
+            if (trainingStartTime > 0) {
+                const elapsed = Math.floor((Date.now() - trainingStartTime) / 1000);
+                trainingElapsedTime.textContent = formatTime(elapsed);
+            }
+        }
+        
+        // Add event to log
+        function addEventToLog(event) {
+            const eventDiv = document.createElement('div');
+            
+            if (event.type === 'success') {
+                eventDiv.className = 'event-success';
+                eventDiv.textContent = `✓ Post ${event.post_id} - ${event.username}: ${event.title} (${event.content_length} chars)`;
+            } else {
+                eventDiv.className = 'event-failure';
+                eventDiv.textContent = `✗ Post ${event.post_id} - ${event.error}`;
+            }
+            
+            eventLog.insertBefore(eventDiv, eventLog.firstChild);
+            
+            // Limit log size
+            if (eventLog.children.length > 100) {
+                eventLog.removeChild(eventLog.lastChild);
+            }
+        }
+        
+        // Connect to SSE endpoint
+        function connectEventSource() {
+            if (eventSource) {
+                eventSource.close();
+            }
+            
+            eventSource = new EventSource('/events');
+            
+            eventSource.onopen = function() {
+                connectionIndicator.classList.remove('connection-inactive');
+                connectionIndicator.classList.add('connection-active');
+                connectionStatus.textContent = 'Connected to server';
+            };
+            
+            eventSource.onerror = function() {
+                connectionIndicator.classList.remove('connection-active');
+                connectionIndicator.classList.add('connection-inactive');
+                connectionStatus.textContent = 'Connection error. Reconnecting...';
+                
+                // Attempt to reconnect after a delay
+                setTimeout(connectEventSource, 5000);
+            };
+            
+            // Handle scraping progress events
+            eventSource.addEventListener('scraping_progress', function(e) {
+                const data = JSON.parse(e.data);
+                
+                // Update progress bar
+                const progress = data.total_posts > 0 ? (data.processed_posts / data.total_posts) * 100 : 0;
+                scrapeProgressBar.style.width = `${progress}%`;
+                scrapeProgressBar.textContent = `${Math.round(progress)}%`;
+                scrapeProgressBar.setAttribute('aria-valuenow', progress);
+                
+                // Update counters
+                processedPosts.textContent = data.processed_posts;
+                totalPosts.textContent = data.total_posts;
+                successfulPosts.textContent = data.successful_posts;
+                failedPosts.textContent = data.failed_posts;
+                currentId.textContent = data.current_id || '-';
+                
+                // Update connection stats
+                successfulConnections.textContent = data.connection_stats.success;
+                failedConnections.textContent = data.connection_stats.failure;
+                avgResponseTime.textContent = data.connection_stats.avg_response_time.toFixed(2);
+                
+                // Update status
+                if (data.is_running) {
+                    scrapingStatus.textContent = 'Running';
+                    if (scrapeStartTime === 0) {
+                        scrapeStartTime = Date.now() - (data.start_time ? (Date.now() - data.start_time * 1000) : 0);
+                        if (scrapeTimer === null) {
+                            scrapeTimer = setInterval(updateScrapeElapsedTime, 1000);
+                        }
+                    }
+                } else {
+                    scrapingStatus.textContent = 'Idle';
+                    if (scrapeTimer !== null) {
+                        clearInterval(scrapeTimer);
+                        scrapeTimer = null;
+                    }
+                    scrapeStartTime = 0;
+                }
+                
+                // Add events to log
+                if (data.events && data.events.length > 0) {
+                    // Clear log if this is a new scraping session
+                    if (data.processed_posts <= data.events.length) {
+                        eventLog.innerHTML = '';
+                    }
+                    
+                    // Add new events
+                    for (const event of data.events) {
+                        // Check if event is already in log
+                        const existingEvents = Array.from(eventLog.children).map(div => div.textContent);
+                        const eventText = event.type === 'success' 
+                            ? `✓ Post ${event.post_id} - ${event.username}: ${event.title} (${event.content_length} chars)`
+                            : `✗ Post ${event.post_id} - ${event.error}`;
+                        
+                        if (!existingEvents.includes(eventText)) {
+                            addEventToLog(event);
+                        }
+                    }
+                }
+            });
+            
+            // Handle training progress events
+            eventSource.addEventListener('training_progress', function(e) {
+                const data = JSON.parse(e.data);
+                
+                // Update progress bar
+                const progress = data.total_steps > 0 ? (data.current_step / data.total_steps) * 100 : 0;
+                trainProgressBar.style.width = `${progress}%`;
+                trainProgressBar.textContent = `${Math.round(progress)}%`;
+                trainProgressBar.setAttribute('aria-valuenow', progress);
+                
+                // Update counters
+                currentStep.textContent = data.current_step;
+                totalSteps.textContent = data.total_steps;
+                currentLoss.textContent = data.loss.toFixed(4);
+                trainingStatus.textContent = data.status || 'Idle';
+                
+                // Update timer
+                if (data.is_running) {
+                    if (trainingStartTime === 0) {
+                        trainingStartTime = Date.now() - (data.start_time ? (Date.now() - data.start_time * 1000) : 0);
+                        if (trainingTimer === null) {
+                            trainingTimer = setInterval(updateTrainingElapsedTime, 1000);
+                        }
+                    }
+                } else {
+                    if (trainingTimer !== null) {
+                        clearInterval(trainingTimer);
+                        trainingTimer = null;
+                    }
+                    trainingStartTime = 0;
+                }
+            });
+        }
+        
+        // Initialize connection
+        connectEventSource();
+        
+        // Form submissions
+        scrapeForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(scrapeForm);
+            
+            fetch('/scrape', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(`Error: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while starting the scraping process.');
+            });
+        });
+        
+        trainForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(trainForm);
+            
+            fetch('/train', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(`Error: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while starting the training process.');
+            });
+        });
+        
+        generateForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(generateForm);
+            generatedText.innerHTML = '<p class="text-muted">Generating text...</p>';
+            
+            fetch('/generate', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    generatedText.innerHTML = `<p class="text-danger">Error: ${data.error}</p>`;
+                } else {
+                    generatedText.innerHTML = data.text.replace(/\n/g, '<br>');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                generatedText.innerHTML = '<p class="text-danger">An error occurred while generating text.</p>';
+            });
+        });
+        
+        // Update temperature value display
+        temperatureSlider.addEventListener('input', function() {
+            temperatureValue.textContent = this.value;
+        });
+    </script>
+</body>
+</html>
